@@ -1,11 +1,11 @@
 use std::time::Instant;
 use cpal::traits::{DeviceTrait, HostTrait};
 use crate::aeonium::music;
+use crate::App;
 
-pub fn sample_next(o: &mut SampleRequestOptions, note: f32) -> f32 {
+pub fn play_note(o: &mut SampleRequestOptions, note: f32) -> f32 {
     o.tick();
     o.tone(note) * 1.
-    // combination of several tones
 }
 
 pub struct SampleRequestOptions {
@@ -23,16 +23,16 @@ impl SampleRequestOptions {
     }
 }
 
-pub fn stream_setup_for<F>(on_sample: F) -> Result<cpal::Stream, anyhow::Error>
+pub fn stream_setup_for<F>(on_sample: F, app: &mut App) -> Result<cpal::Stream, anyhow::Error>
     where
         F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static + Copy,
 {
     let (_host, device, config) = host_device_setup()?;
 
     match config.sample_format() {
-        cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample),
-        cpal::SampleFormat::I16 => stream_make::<i16, _>(&device, &config.into(), on_sample),
-        cpal::SampleFormat::U16 => stream_make::<u16, _>(&device, &config.into(), on_sample),
+        cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample, app),
+        cpal::SampleFormat::I16 => stream_make::<i16, _>(&device, &config.into(), on_sample, app),
+        cpal::SampleFormat::U16 => stream_make::<u16, _>(&device, &config.into(), on_sample, app),
     }
 }
 
@@ -50,13 +50,14 @@ pub fn host_device_setup() -> Result<(cpal::Host, cpal::Device, cpal::SupportedS
     Ok((host, device, config))
 }
 
-fn bpm_to_miliseconds (bpm: u128) -> u128 {
+fn bpm_to_miliseconds (bpm: &u128) -> u128 {
     60000 / bpm
 }
 pub fn stream_make<T, F>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
     on_sample: F,
+    app: &mut App,
 ) -> Result<cpal::Stream, anyhow::Error>
     where
         T: cpal::Sample,
@@ -81,7 +82,7 @@ pub fn stream_make<T, F>(
     let stream = device.build_output_stream(
         config,
         move |output: &mut [T], _: &cpal::OutputCallbackInfo| {
-            if time.elapsed().as_millis() >= bpm_to_miliseconds(320) {
+            if time.elapsed().as_millis() >= bpm_to_miliseconds(&app.bpm) {
                 time = Instant::now();
                 i += 1;
                 if i == track_len { i = 0 };
