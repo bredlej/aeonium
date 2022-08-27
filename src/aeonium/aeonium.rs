@@ -1,8 +1,45 @@
-pub mod core;
+use std::time::Instant;
+use cpal::traits::{DeviceTrait, HostTrait};
 
-fn sample_next(o: &mut SampleRequestOptions) -> f32 {
+pub enum Note {
+    C4,
+    CSharp4,
+    D4,
+    DSharp4,
+    E4,
+    F4,
+    FSharp4,
+    G4,
+    GSharp4,
+    A4,
+    ASharp4,
+    B4,
+    C5,
+}
+
+impl Note {
+    fn freq(&self) -> f32 {
+        match *self {
+            Note::C4 => 261.,
+            Note::CSharp4 => 277.,
+            Note::D4 => 294.,
+            Note::DSharp4 => 311.,
+            Note::E4 => 330.,
+            Note::F4 => 349.,
+            Note::FSharp4 => 370.,
+            Note::G4 => 392.,
+            Note::GSharp4 => 415.,
+            Note::A4 => 440.,
+            Note::ASharp4 => 466.,
+            Note::B4 => 493.,
+            Note::C5 => 523.,
+        }
+    }
+}
+
+pub fn sample_next(o: &mut SampleRequestOptions, note: f32) -> f32 {
     o.tick();
-    o.tone(440.) * 0.1 + o.tone(880.) * 0.1
+    o.tone(note) * 1.
     // combination of several tones
 }
 
@@ -23,7 +60,7 @@ impl SampleRequestOptions {
 
 pub fn stream_setup_for<F>(on_sample: F) -> Result<cpal::Stream, anyhow::Error>
     where
-        F: FnMut(&mut SampleRequestOptions) -> f32 + std::marker::Send + 'static + Copy,
+        F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static + Copy,
 {
     let (_host, device, config) = host_device_setup()?;
 
@@ -34,8 +71,7 @@ pub fn stream_setup_for<F>(on_sample: F) -> Result<cpal::Stream, anyhow::Error>
     }
 }
 
-pub fn host_device_setup(
-) -> Result<(cpal::Host, cpal::Device, cpal::SupportedStreamConfig), anyhow::Error> {
+pub fn host_device_setup() -> Result<(cpal::Host, cpal::Device, cpal::SupportedStreamConfig), anyhow::Error> {
     let host = cpal::default_host();
 
     let device = host
@@ -56,7 +92,7 @@ pub fn stream_make<T, F>(
 ) -> Result<cpal::Stream, anyhow::Error>
     where
         T: cpal::Sample,
-        F: FnMut(&mut SampleRequestOptions) -> f32 + std::marker::Send + 'static + Copy,
+        F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static + Copy,
 {
     let sample_rate = config.sample_rate.0 as f32;
     let sample_clock = 0f32;
@@ -68,10 +104,20 @@ pub fn stream_make<T, F>(
     };
     let err_fn = |err| eprintln!("Error building output sound stream: {}", err);
 
+    let track: Vec<f32> = vec![Note::C4, Note::D4, Note::E4, Note::F4, Note::G4, Note::A4, Note::B4, Note::C5].iter().map(|note| note.freq()).collect();
+    let track_len = track.len();
+
+    let mut time = Instant::now();
+    let mut i = 0;
     let stream = device.build_output_stream(
         config,
         move |output: &mut [T], _: &cpal::OutputCallbackInfo| {
-            on_window(output, &mut request, on_sample)
+            if time.elapsed().as_secs() == 1 {
+                time = Instant::now();
+                i += 1;
+                if i == track_len { i = 0 };
+            }
+            on_window(output, &mut request, on_sample, track[i])
         },
         err_fn,
     )?;
@@ -79,15 +125,17 @@ pub fn stream_make<T, F>(
     Ok(stream)
 }
 
-fn on_window<T, F>(output: &mut [T], request: &mut SampleRequestOptions, mut on_sample: F)
+fn on_window<T, F>(output: &mut [T], request: &mut SampleRequestOptions, mut on_sample: F, note: f32)
     where
         T: cpal::Sample,
-        F: FnMut(&mut SampleRequestOptions) -> f32 + std::marker::Send + 'static,
+        F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static,
 {
+    let mut i = 0;
     for frame in output.chunks_mut(request.nchannels) {
-        let value: T = cpal::Sample::from::<f32>(&on_sample(request));
+        let value: T = cpal::Sample::from::<f32>(&on_sample(request, note));
         for sample in frame.iter_mut() {
             *sample = value;
         }
+        i += 1;
     }
 }
