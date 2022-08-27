@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use cpal::traits::{DeviceTrait, HostTrait};
 use crate::aeonium::music;
@@ -23,7 +24,7 @@ impl SampleRequestOptions {
     }
 }
 
-pub fn stream_setup_for<F>(on_sample: F, app: &mut App) -> Result<cpal::Stream, anyhow::Error>
+pub fn stream_setup_for<F>(on_sample: F, app: Arc<Mutex<App>>) -> Result<cpal::Stream, anyhow::Error>
     where
         F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static + Copy,
 {
@@ -57,7 +58,7 @@ pub fn stream_make<T, F>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
     on_sample: F,
-    app: &mut App,
+    app: Arc<Mutex<App>>,
 ) -> Result<cpal::Stream, anyhow::Error>
     where
         T: cpal::Sample,
@@ -82,7 +83,7 @@ pub fn stream_make<T, F>(
     let stream = device.build_output_stream(
         config,
         move |output: &mut [T], _: &cpal::OutputCallbackInfo| {
-            if time.elapsed().as_millis() >= bpm_to_miliseconds(&app.bpm) {
+            if time.elapsed().as_millis() >= bpm_to_miliseconds(&app.lock().unwrap().bpm) {
                 time = Instant::now();
                 i += 1;
                 if i == track_len { i = 0 };

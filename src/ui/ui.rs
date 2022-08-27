@@ -3,7 +3,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{error::Error, io};
+use std::{error::Error, io, sync::{Arc, Mutex}};
 use cpal::Stream;
 use cpal::traits::StreamTrait;
 use tui::{
@@ -21,8 +21,8 @@ use crate::{aeonium, App};
 use crate::ui::InputMode;
 
 
-pub fn run(stream: Stream, app: &mut App) -> anyhow::Result<()> {
-    stream.play();
+pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>) -> anyhow::Result<()> {
+    stream.play()?;
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -47,12 +47,14 @@ pub fn run(stream: Stream, app: &mut App) -> anyhow::Result<()> {
     Ok(())
 
 }
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()> {
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut Arc<Mutex<App>>) -> io::Result<()> {
 
     loop {
-        terminal.draw(|f| ui(f, &app))?;
+        terminal.draw(|f| ui(f))?;
 
         if let Event::Key(key) = event::read()? {
+
+                let mut app = app.lock().unwrap();
 
                 match key.code {
                     KeyCode::Char('q') => {
@@ -62,7 +64,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         app.bpm += 30;
                     },
                     KeyCode::Char('-') => {
-                        app.bpm += 30;
+                        app.bpm -= 30;
                     }
                     _ => {}
                 }
@@ -72,7 +74,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
     }
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
+fn ui<B: Backend>(f: &mut Frame<B>) {
 
     // Wrapping block for a group
     // Just draw the block and the group on the same area and build the group
