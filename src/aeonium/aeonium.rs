@@ -50,6 +50,9 @@ pub fn host_device_setup() -> Result<(cpal::Host, cpal::Device, cpal::SupportedS
     Ok((host, device, config))
 }
 
+fn bpm_to_miliseconds (bpm: u128) -> u128 {
+    60000 / bpm
+}
 pub fn stream_make<T, F>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
@@ -74,10 +77,11 @@ pub fn stream_make<T, F>(
 
     let mut time = Instant::now();
     let mut i = 0;
+
     let stream = device.build_output_stream(
         config,
         move |output: &mut [T], _: &cpal::OutputCallbackInfo| {
-            if time.elapsed().as_secs() == 1 {
+            if time.elapsed().as_millis() >= bpm_to_miliseconds(320) {
                 time = Instant::now();
                 i += 1;
                 if i == track_len { i = 0 };
