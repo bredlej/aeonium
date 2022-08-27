@@ -54,17 +54,17 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut Arc<Mutex<App>>) ->
 
         if let Event::Key(key) = event::read()? {
 
-                let mut mutable_app = app.lock().unwrap();
+                let mut app = app.lock().unwrap();
 
                 match key.code {
                     KeyCode::Char('q') => {
                         return Ok(());
                     },
                     KeyCode::Char('+') => {
-                        mutable_app.bpm += 30;
+                        app.bpm += 30;
                     },
                     KeyCode::Char('-') => {
-                        mutable_app.bpm -= 30;
+                        app.bpm -= 30;
                     }
                     _ => {}
                 }
