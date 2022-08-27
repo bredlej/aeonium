@@ -1,41 +1,6 @@
 use std::time::Instant;
 use cpal::traits::{DeviceTrait, HostTrait};
-
-pub enum Note {
-    C4,
-    CSharp4,
-    D4,
-    DSharp4,
-    E4,
-    F4,
-    FSharp4,
-    G4,
-    GSharp4,
-    A4,
-    ASharp4,
-    B4,
-    C5,
-}
-
-impl Note {
-    fn freq(&self) -> f32 {
-        match *self {
-            Note::C4 => 261.,
-            Note::CSharp4 => 277.,
-            Note::D4 => 294.,
-            Note::DSharp4 => 311.,
-            Note::E4 => 330.,
-            Note::F4 => 349.,
-            Note::FSharp4 => 370.,
-            Note::G4 => 392.,
-            Note::GSharp4 => 415.,
-            Note::A4 => 440.,
-            Note::ASharp4 => 466.,
-            Note::B4 => 493.,
-            Note::C5 => 523.,
-        }
-    }
-}
+use crate::aeonium::music;
 
 pub fn sample_next(o: &mut SampleRequestOptions, note: f32) -> f32 {
     o.tick();
@@ -104,7 +69,7 @@ pub fn stream_make<T, F>(
     };
     let err_fn = |err| eprintln!("Error building output sound stream: {}", err);
 
-    let track: Vec<f32> = vec![Note::C4, Note::D4, Note::E4, Note::F4, Note::G4, Note::A4, Note::B4, Note::C5].iter().map(|note| note.freq()).collect();
+    let track: Vec<f32> = vec![music::Note::C4, music::Note::D4, music::Note::E4, music::Note::F4, music::Note::G4, music::Note::A4, music::Note::B4, music::Note::C5].iter().map(|note| note.freq()).collect();
     let track_len = track.len();
 
     let mut time = Instant::now();
@@ -130,12 +95,10 @@ fn on_window<T, F>(output: &mut [T], request: &mut SampleRequestOptions, mut on_
         T: cpal::Sample,
         F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static,
 {
-    let mut i = 0;
     for frame in output.chunks_mut(request.nchannels) {
         let value: T = cpal::Sample::from::<f32>(&on_sample(request, note));
         for sample in frame.iter_mut() {
             *sample = value;
         }
-        i += 1;
     }
 }

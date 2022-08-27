@@ -10,5 +10,4 @@ fn main() -> anyhow::Result<()> {
     let stream = aeonium::stream_setup_for(aeonium::sample_next)?;
     stream.play()?;
     loop {}
-    Ok(())
 }
