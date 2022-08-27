@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use cpal::traits::{DeviceTrait, HostTrait};
@@ -80,8 +79,6 @@ pub fn stream_make<T, F>(
 
     let mut time = Instant::now();
     let mut i = 0;
-
-    let app = app.clone();
 
     let stream = device.build_output_stream(
         config,

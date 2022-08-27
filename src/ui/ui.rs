@@ -22,7 +22,7 @@ use crate::ui::InputMode;
 
 
 pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>) -> anyhow::Result<()> {
-    stream.play();
+    stream.play()?;
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
