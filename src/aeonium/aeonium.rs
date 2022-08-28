@@ -1,8 +1,10 @@
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{channel, sync_channel};
 use std::time::Instant;
 use cpal::traits::{DeviceTrait, HostTrait};
 use crate::aeonium::music;
 use crate::App;
+use crate::common::BeatEvent;
 
 pub fn play_note(o: &mut SampleRequestOptions, note: f32) -> f32 {
     o.tick();
@@ -54,6 +56,7 @@ pub fn host_device_setup() -> Result<(cpal::Host, cpal::Device, cpal::SupportedS
 fn bpm_to_miliseconds (bpm: &u128) -> u128 {
     60000 / bpm
 }
+
 pub fn stream_make<T, F>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
@@ -79,7 +82,7 @@ pub fn stream_make<T, F>(
 
     let mut time = Instant::now();
     let mut i = 0;
-
+    let (tx, rx) = sync_channel(3);
     let stream = device.build_output_stream(
         config,
         move |output: &mut [T], _: &cpal::OutputCallbackInfo| {
@@ -87,6 +90,7 @@ pub fn stream_make<T, F>(
                 time = Instant::now();
                 i += 1;
                 if i == track_len { i = 0 };
+                tx.send(BeatEvent{});
             }
             on_window(output, &mut request, on_sample, track[i])
         },

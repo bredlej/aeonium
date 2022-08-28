@@ -3,16 +3,17 @@ extern crate cpal;
 
 mod aeonium;
 mod ui;
+mod common;
 
 use std::sync::{Arc, Mutex};
 
 use cpal::traits::{StreamTrait};
-use crate::ui::App;
-
+use crate::common::App;
 
 fn main() -> anyhow::Result<()> {
 
     let app = Arc::new(Mutex::new(App::default()));
+
     let mut app_mut = app.clone();
     let stream = aeonium::stream_setup_for(aeonium::play_note, app).unwrap();
 

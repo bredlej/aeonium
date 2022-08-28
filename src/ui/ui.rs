@@ -4,6 +4,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{error::Error, io, sync::{Arc, Mutex}};
+use std::sync::mpsc::{channel, RecvError, Sender};
 use cpal::Stream;
 use cpal::traits::StreamTrait;
 use tui::{
@@ -14,12 +15,14 @@ use tui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame, Terminal,
 };
-use tui::layout::Alignment;
-use tui::widgets::BorderType;
+use tui::buffer::Buffer;
+use tui::layout::{Alignment, Rect};
+use tui::widgets::{BorderType, Widget};
 use unicode_width::UnicodeWidthStr;
 use crate::{aeonium, App};
+use crate::common::{Beat, BeatEvent};
 use crate::ui::InputMode;
-
+use crate::ui::widgets::BpmWidget;
 
 pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>) -> anyhow::Result<()> {
     stream.play()?;
@@ -45,98 +48,65 @@ pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>) -> anyhow::Result<()> {
         println!("{:?}", err)
     }
     Ok(())
-
 }
+
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut Arc<Mutex<App>>) -> io::Result<()> {
 
     loop {
-        terminal.draw(|f| ui(f))?;
+        terminal.draw(|f| ui(f, app))?;
 
         if let Event::Key(key) = event::read()? {
+            let mut app = app.lock().unwrap();
 
-                let mut app = app.lock().unwrap();
-
-                match key.code {
-                    KeyCode::Char('q') => {
-                        return Ok(());
-                    },
-                    KeyCode::Char('+') => {
-                        app.bpm += 30;
-                    },
-                    KeyCode::Char('-') => {
-                        app.bpm -= 30;
-                    }
-                    _ => {}
+            match key.code {
+                KeyCode::Char('q') => {
+                    return Ok(());
                 }
-
-
+                KeyCode::Char('+') => {
+                    app.bpm += 1;
+                }
+                KeyCode::Char('-') => {
+                    app.bpm -= 1;
+                }
+                _ => {}
+            }
         }
     }
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>) {
+fn ui<B: Backend>(f: &mut Frame<B>, app: &mut Arc<Mutex<App>>) {
 
-    // Wrapping block for a group
-    // Just draw the block and the group on the same area and build the group
-    // with at least a margin of 1
     let size = f.size();
 
-    // Surrounding block
     let block = Block::default()
+        .title("Aeonium v0.0.1")
         .borders(Borders::ALL)
-        .title("Main block with round corners")
         .title_alignment(Alignment::Center)
         .border_type(BorderType::Rounded);
+
     f.render_widget(block, size);
 
-    let chunks = Layout::default()
+    let main_layout = Layout::default()
         .direction(Direction::Vertical)
-        .margin(4)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+        .margin(1)
+        .constraints([Constraint::Percentage(10), Constraint::Percentage(50), Constraint::Percentage(40)].as_ref())
         .split(f.size());
 
-    // Top two inner blocks
-    let top_chunks = Layout::default()
+    let top_layout = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-        .split(chunks[0]);
+        .constraints([Constraint::Ratio(1,3)])
+        .split(main_layout[0]);
 
-    // Top left inner block with green background
-    let block = Block::default()
-        .title(vec![
-            Span::styled("With", Style::default().fg(Color::Yellow)),
-            Span::from(" background"),
-        ])
-        .style(Style::default().bg(Color::Green));
-    f.render_widget(block, top_chunks[0]);
-
-    // Top right inner block with styled title aligned to the right
-    let block = Block::default()
-        .title(Span::styled(
-            "Styled title",
-            Style::default()
-                .fg(Color::White)
-                .bg(Color::Red)
-                .add_modifier(Modifier::BOLD),
-        ))
-        .title_alignment(Alignment::Right);
-    f.render_widget(block, top_chunks[1]);
-
-    // Bottom two inner blocks
-    let bottom_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-        .split(chunks[1]);
-
-    // Bottom left block with all default borders
-    let block = Block::default().title("With borders").borders(Borders::ALL);
-    f.render_widget(block, bottom_chunks[0]);
-
-    // Bottom right block with styled left and right border
-    let block = Block::default()
-        .title("With styled borders and doubled borders")
-        .border_style(Style::default().fg(Color::Cyan))
-        .borders(Borders::LEFT | Borders::RIGHT)
+    let top_bar = Block::default()
+        .title("Settings")
+        .borders(Borders::ALL)
         .border_type(BorderType::Double);
-    f.render_widget(block, bottom_chunks[1]);
+    let bpm_area = top_bar.inner(top_layout[0]);
+
+    let bpm_widget = BpmWidget{ bpm: &app.lock().unwrap().bpm};
+    let bpm_arc = Arc::new(Mutex::new(&bpm_widget));
+
+    f.render_widget(top_bar, top_layout[0]);
+    f.render_widget(bpm_widget, bpm_area);
+
 }
