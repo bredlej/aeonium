@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{channel, sync_channel};
+use std::sync::mpsc::{Sender};
 use std::time::Instant;
 use cpal::traits::{DeviceTrait, HostTrait};
-use crate::aeonium::music;
+use crate::aeonium::{music, Note};
 use crate::App;
 use crate::common::BeatEvent;
 
@@ -26,16 +26,16 @@ impl SampleRequestOptions {
     }
 }
 
-pub fn stream_setup_for<F>(on_sample: F, app: Arc<Mutex<App>>) -> Result<cpal::Stream, anyhow::Error>
+pub fn stream_setup_for<F>(on_sample: F, app: Arc<Mutex<App>>, beat_sender: Sender<BeatEvent>) -> Result<cpal::Stream, anyhow::Error>
     where
         F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static + Copy,
 {
     let (_host, device, config) = host_device_setup()?;
 
     match config.sample_format() {
-        cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample, app),
-        cpal::SampleFormat::I16 => stream_make::<i16, _>(&device, &config.into(), on_sample, app),
-        cpal::SampleFormat::U16 => stream_make::<u16, _>(&device, &config.into(), on_sample, app),
+        cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample, app, beat_sender),
+        cpal::SampleFormat::I16 => stream_make::<i16, _>(&device, &config.into(), on_sample, app, beat_sender),
+        cpal::SampleFormat::U16 => stream_make::<u16, _>(&device, &config.into(), on_sample, app, beat_sender),
     }
 }
 
@@ -53,7 +53,7 @@ pub fn host_device_setup() -> Result<(cpal::Host, cpal::Device, cpal::SupportedS
     Ok((host, device, config))
 }
 
-fn bpm_to_miliseconds (bpm: &u128) -> u128 {
+fn bpm_to_miliseconds(bpm: &u128) -> u128 {
     60000 / bpm
 }
 
@@ -62,6 +62,7 @@ pub fn stream_make<T, F>(
     config: &cpal::StreamConfig,
     on_sample: F,
     app: Arc<Mutex<App>>,
+    beat_sender: Sender<BeatEvent>,
 ) -> Result<cpal::Stream, anyhow::Error>
     where
         T: cpal::Sample,
@@ -77,22 +78,22 @@ pub fn stream_make<T, F>(
     };
     let err_fn = |err| eprintln!("Error building output sound stream: {}", err);
 
-    let track: Vec<f32> = vec![music::Note::C4, music::Note::D4, music::Note::E4, music::Note::F4, music::Note::G4, music::Note::A4, music::Note::B4, music::Note::C5].iter().map(|note| note.freq()).collect();
+    let track: Vec<Note> = vec![music::Note::C4, music::Note::D4, music::Note::E4, music::Note::F4, music::Note::G4, music::Note::A4, music::Note::B4, music::Note::C5];
     let track_len = track.len();
 
     let mut time = Instant::now();
     let mut i = 0;
-    let (tx, rx) = sync_channel(3);
+
     let stream = device.build_output_stream(
         config,
         move |output: &mut [T], _: &cpal::OutputCallbackInfo| {
             if time.elapsed().as_millis() >= bpm_to_miliseconds(&app.lock().unwrap().bpm) {
+                beat_sender.send(BeatEvent{note: track[i].clone()}).unwrap();
                 time = Instant::now();
                 i += 1;
                 if i == track_len { i = 0 };
-                tx.send(BeatEvent{});
             }
-            on_window(output, &mut request, on_sample, track[i])
+            on_window(output, &mut request, on_sample, track[i].freq())
         },
         err_fn,
     )?;

@@ -6,8 +6,8 @@ mod ui;
 mod common;
 
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc::channel;
 
-use cpal::traits::{StreamTrait};
 use crate::common::App;
 
 fn main() -> anyhow::Result<()> {
@@ -15,7 +15,8 @@ fn main() -> anyhow::Result<()> {
     let app = Arc::new(Mutex::new(App::default()));
 
     let mut app_mut = app.clone();
-    let stream = aeonium::stream_setup_for(aeonium::play_note, app).unwrap();
+    let (beat_sender, beat_receiver) = channel();
+    let stream = aeonium::stream_setup_for(aeonium::play_note, app, beat_sender).unwrap();
 
-    ui::run(stream, &mut app_mut)
+    ui::run(stream, &mut app_mut, &beat_receiver)
 }

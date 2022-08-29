@@ -1,12 +1,12 @@
-use std::sync::mpsc::{channel, Sender};
 use tui::buffer::Buffer;
 use tui::layout::Rect;
-use tui::style::Style;
+use tui::style::{Color, Modifier, Style};
 use tui::widgets::Widget;
 use crate::common::{Beat, BeatEvent};
 
 pub struct BpmWidget<'a> {
     pub bpm: &'a u128,
+    pub has_beat: bool,
 }
 
 impl<'a> Beat for BpmWidget<'a> {
@@ -17,20 +17,15 @@ impl<'a> Beat for BpmWidget<'a> {
 
 impl<'a> Widget for BpmWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let (tx, rx): (Sender<BeatEvent>, std::sync::mpsc::Receiver<BeatEvent>) = channel();
-        let beat_event = rx.try_recv();
-        match beat_event {
-            Ok(_) => {println!("Beat");}
-            Err(_) => {}
+        let text: String;
+        let style: Style;
+        if self.has_beat {
+            style = Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD);
         }
-        let text = format!("BPM: {}", self.bpm);
-        buf.set_string(area.left(), area.top(), text, Style::default());
-    }
-}
-
-impl<'a> BpmWidget<'a> {
-    fn text(mut self, bpm: &'a u128) -> BpmWidget<'a> {
-        self.bpm = bpm;
-        self
+        else {
+            style = Style::default().fg(Color::White);
+        }
+        text = format!("BPM: {}", self.bpm);
+        buf.set_string(area.left(), area.top(), text, style);
     }
 }

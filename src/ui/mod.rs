@@ -3,8 +3,3 @@ pub use ui::*;
 pub use widgets::*;
 
 mod widgets;
-
-enum InputMode {
-    Normal,
-    Editing,
-}

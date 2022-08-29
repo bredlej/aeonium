@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub enum Note {
     C4,
     CSharp4,
