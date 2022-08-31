@@ -8,7 +8,7 @@ use crate::common::BeatEvent;
 
 pub fn play_note(o: &mut SampleRequestOptions, note: f32) -> f32 {
     o.tick();
-    o.tone(note) * 1.
+    o.tone(note) * 0.3 + o.tone(note + 19.) *0.6 + o.tone(note+ 38.) *0.9 + o.tone(note+ 97.) *0.2 + o.tone(note -47.4) *0.2 + o.tone(note- 112.) *0.4
 }
 
 pub struct SampleRequestOptions {
@@ -26,16 +26,16 @@ impl SampleRequestOptions {
     }
 }
 
-pub fn stream_setup_for<F>(on_sample: F, app: Arc<Mutex<App>>, beat_sender: Sender<BeatEvent>) -> Result<cpal::Stream, anyhow::Error>
+pub fn stream_setup_for<F>(on_sample: F, app: Arc<Mutex<App>>, beat_sender: Sender<BeatEvent>, sample_sender: Sender<Vec<f32>>) -> Result<cpal::Stream, anyhow::Error>
     where
         F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static + Copy,
 {
     let (_host, device, config) = host_device_setup()?;
 
     match config.sample_format() {
-        cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample, app, beat_sender),
-        cpal::SampleFormat::I16 => stream_make::<i16, _>(&device, &config.into(), on_sample, app, beat_sender),
-        cpal::SampleFormat::U16 => stream_make::<u16, _>(&device, &config.into(), on_sample, app, beat_sender),
+        cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample, app, beat_sender, sample_sender),
+        cpal::SampleFormat::I16 => stream_make::<i16, _>(&device, &config.into(), on_sample, app, beat_sender, sample_sender),
+        cpal::SampleFormat::U16 => stream_make::<u16, _>(&device, &config.into(), on_sample, app, beat_sender, sample_sender),
     }
 }
 
@@ -60,9 +60,10 @@ fn bpm_to_miliseconds(bpm: &u128) -> u128 {
 pub fn stream_make<T, F>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
-    on_sample: F,
+    sound_function: F,
     app: Arc<Mutex<App>>,
     beat_sender: Sender<BeatEvent>,
+    sample_sender: Sender<Vec<f32>>,
 ) -> Result<cpal::Stream, anyhow::Error>
     where
         T: cpal::Sample,
@@ -86,14 +87,14 @@ pub fn stream_make<T, F>(
 
     let stream = device.build_output_stream(
         config,
-        move |output: &mut [T], _: &cpal::OutputCallbackInfo| {
+        move |output: &mut [T], oci: &cpal::OutputCallbackInfo| {
             if time.elapsed().as_millis() >= bpm_to_miliseconds(&app.lock().unwrap().bpm) {
                 beat_sender.send(BeatEvent{note: track[i].clone()}).unwrap();
                 time = Instant::now();
                 i += 1;
                 if i == track_len { i = 0 };
             }
-            on_window(output, &mut request, on_sample, track[i].freq())
+            update_sample_buffer(output, &mut request, sound_function, track[i].freq(), &sample_sender)
         },
         err_fn,
     )?;
@@ -101,15 +102,19 @@ pub fn stream_make<T, F>(
     Ok(stream)
 }
 
-fn on_window<T, F>(output: &mut [T], request: &mut SampleRequestOptions, mut on_sample: F, note: f32)
+fn update_sample_buffer<T, F>(output: &mut [T], request: &mut SampleRequestOptions, mut sound_function: F, note: f32, sample_sender: &Sender<Vec<f32>>,)
     where
         T: cpal::Sample,
         F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static,
 {
+    let mut samples = vec![];
+    samples.clear();
     for frame in output.chunks_mut(request.nchannels) {
-        let value: T = cpal::Sample::from::<f32>(&on_sample(request, note));
+        let value: T = cpal::Sample::from::<f32>(&sound_function(request, note));
         for sample in frame.iter_mut() {
             *sample = value;
         }
+        samples.push(value.to_f32());
     }
+    sample_sender.send(samples);
 }
