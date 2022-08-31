@@ -8,7 +8,7 @@ use crate::common::BeatEvent;
 
 pub fn play_note(o: &mut SampleRequestOptions, note: f32) -> f32 {
     o.tick();
-    o.tone(note) * 0.3 + o.tone(note + 19.) *0.6 + o.tone(note+ 38.) *0.9 + o.tone(note+ 97.) *0.2 + o.tone(note -47.4) *0.2 + o.tone(note- 112.) *0.4
+    o.tone(note) * 0.3 + o.tone(note + 19.) *0.6 + o.tone(Note::DSharp4.freq()) *0.9 + o.tone(note+ 97.) *0.1 + o.tone(Note::FSharp4.freq()) *0.8 + o.tone(note- 112.) *0.4
 }
 
 pub struct SampleRequestOptions {
@@ -113,8 +113,8 @@ fn update_sample_buffer<T, F>(output: &mut [T], request: &mut SampleRequestOptio
         let value: T = cpal::Sample::from::<f32>(&sound_function(request, note));
         for sample in frame.iter_mut() {
             *sample = value;
+            samples.push(value.to_f32());
         }
-        samples.push(value.to_f32());
     }
     sample_sender.send(samples);
 }
