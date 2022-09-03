@@ -5,23 +5,23 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use crate::aeonium::music::Note;
 use crate::aeonium::waveform::{SinWave, Waveform};
 use crate::App;
-use crate::common::BeatEvent;
+use crate::common::{BeatEvent, ChannelPair, ThreadComm};
 
 pub fn play_note(waveform: &mut dyn Waveform, frequency: f32, velocity: f32) -> f32 {
     waveform.tick();
     waveform.tone(frequency) * velocity
 }
 
-pub fn stream_setup_for<F>(on_sample: F, app: Arc<Mutex<App>>, beat_sender: Sender<BeatEvent>, sample_sender: Sender<Vec<f32>>) -> Result<cpal::Stream, anyhow::Error>
+pub fn stream_setup_for<F>(on_sample: F, app: Arc<Mutex<App>>, thread_comm: &ThreadComm) -> Result<cpal::Stream, anyhow::Error>
     where
         F: FnMut(&mut dyn Waveform, f32, f32) -> f32 + std::marker::Send + 'static + Copy,
 {
     let (_host, device, config) = host_device_setup()?;
 
     match config.sample_format() {
-        cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample, app, beat_sender, sample_sender),
-        cpal::SampleFormat::I16 => stream_make::<i16, _>(&device, &config.into(), on_sample, app, beat_sender, sample_sender),
-        cpal::SampleFormat::U16 => stream_make::<u16, _>(&device, &config.into(), on_sample, app, beat_sender, sample_sender),
+        cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample, app, thread_comm),
+        cpal::SampleFormat::I16 => stream_make::<i16, _>(&device, &config.into(), on_sample, app, thread_comm),
+        cpal::SampleFormat::U16 => stream_make::<u16, _>(&device, &config.into(), on_sample, app, thread_comm),
     }
 }
 
@@ -48,8 +48,7 @@ pub fn stream_make<T, F>(
     config: &cpal::StreamConfig,
     sound_function: F,
     app: Arc<Mutex<App>>,
-    beat_sender: Sender<BeatEvent>,
-    sample_sender: Sender<Vec<f32>>,
+    thread_comm: &ThreadComm,
 ) -> Result<cpal::Stream, anyhow::Error>
     where
         T: cpal::Sample,
@@ -70,6 +69,9 @@ pub fn stream_make<T, F>(
 
     let mut time = Instant::now();
     let mut i = 0;
+
+    let beat_sender = thread_comm.beats.tx.clone();
+    let sample_sender = thread_comm.samples.tx.clone();
 
     let stream = device.build_output_stream(
         config,
