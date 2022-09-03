@@ -14,11 +14,11 @@ use tui::style::{Color, Modifier, Style};
 use tui::text::Span;
 use tui::widgets::{Axis, BorderType, Chart, Dataset};
 use crate::{App};
-use crate::common::{BeatEvent};
+use crate::common::{BeatEvent, ChannelPair, ThreadComm};
 use crate::ui::SampleWidget;
 use crate::ui::widgets::BpmWidget;
 
-pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>, beat_receiver: &Receiver<BeatEvent>, sample_receiver: &Receiver<Vec<f32>>) -> anyhow::Result<()> {
+pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>, thread_comm: &ThreadComm) -> anyhow::Result<()> {
     stream.play()?;
     enable_raw_mode()?;
 
@@ -27,7 +27,7 @@ pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>, beat_receiver: &Receiver<B
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let res = run_ui(&mut terminal, app, beat_receiver, sample_receiver);
+    let res = run_ui(&mut terminal, app, thread_comm);
 
     disable_raw_mode()?;
     execute!(
@@ -43,16 +43,16 @@ pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>, beat_receiver: &Receiver<B
     Ok(())
 }
 
-fn run_ui<B: Backend>(terminal: &mut Terminal<B>, app: &mut Arc<Mutex<App>>, beat_receiver: &Receiver<BeatEvent>, sample_receiver: &Receiver<Vec<f32>>) -> io::Result<()> {
+fn run_ui<B: Backend>(terminal: &mut Terminal<B>, app: &mut Arc<Mutex<App>>, thread_comm: &ThreadComm) -> io::Result<()> {
     loop {
 
-        let beat_event = beat_receiver.try_recv();
+        let beat_event = thread_comm.beats.rx.try_recv();
         let received = match beat_event {
             Ok(_) => { true }
             Err(_) => { false }
         };
 
-        let sample_packet = sample_receiver.try_recv();
+        let sample_packet = thread_comm.samples.rx.try_recv();
         let samples = match sample_packet {
             Ok(samples) => {samples}
             Err(_) => {vec![]}
