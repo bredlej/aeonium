@@ -1,4 +1,7 @@
 mod aeonium;
-mod music;
+pub(crate) mod music;
+mod waveform;
+
 pub use aeonium::*;
-pub use music::*;
+
+use waveform::*;

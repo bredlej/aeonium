@@ -1,4 +1,5 @@
-use crate::aeonium::Note;
+use std::sync::mpsc::{Receiver, Sender};
+use crate::aeonium::music::Note;
 
 pub struct BeatEvent {
     pub note: Note,
@@ -10,14 +11,14 @@ pub trait Beat {
 
 pub struct App {
     pub bpm: u128,
-    pub samples: Vec<f32>
+    pub samples: Vec<f32>,
 }
 
 impl Default for App {
     fn default() -> App {
         App {
             bpm: 60,
-            samples: vec![]
+            samples: vec![],
         }
     }
 }

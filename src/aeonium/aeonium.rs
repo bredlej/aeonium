@@ -2,33 +2,19 @@ use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender};
 use std::time::Instant;
 use cpal::traits::{DeviceTrait, HostTrait};
-use crate::aeonium::{music, Note};
+use crate::aeonium::music::Note;
+use crate::aeonium::waveform::{SinWave, Waveform};
 use crate::App;
 use crate::common::BeatEvent;
 
-pub fn play_note(o: &mut SampleRequestOptions, note: f32) -> f32 {
-    o.tick();
-    o.tone(note) * 0.3 + o.tone(note + 19.) *0.6 + o.tone(Note::DSharp4.freq()) *0.9 + o.tone(note+ 97.) *0.1 + o.tone(Note::FSharp4.freq()) *0.8 + o.tone(note- 112.) *0.4
-}
-
-pub struct SampleRequestOptions {
-    pub sample_rate: f32,
-    pub sample_clock: f32,
-    pub nchannels: usize,
-}
-
-impl SampleRequestOptions {
-    fn tone(&self, freq: f32) -> f32 {
-        (self.sample_clock * freq * 2.0 * std::f32::consts::PI / self.sample_rate).sin()
-    }
-    fn tick(&mut self) {
-        self.sample_clock = (self.sample_clock + 1.0) % self.sample_rate;
-    }
+pub fn play_note(waveform: &mut dyn Waveform, frequency: f32, velocity: f32) -> f32 {
+    waveform.tick();
+    waveform.tone(frequency) * velocity
 }
 
 pub fn stream_setup_for<F>(on_sample: F, app: Arc<Mutex<App>>, beat_sender: Sender<BeatEvent>, sample_sender: Sender<Vec<f32>>) -> Result<cpal::Stream, anyhow::Error>
     where
-        F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static + Copy,
+        F: FnMut(&mut dyn Waveform, f32, f32) -> f32 + std::marker::Send + 'static + Copy,
 {
     let (_host, device, config) = host_device_setup()?;
 
@@ -67,19 +53,19 @@ pub fn stream_make<T, F>(
 ) -> Result<cpal::Stream, anyhow::Error>
     where
         T: cpal::Sample,
-        F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static + Copy,
+        F: FnMut(&mut dyn Waveform, f32, f32) -> f32 + std::marker::Send + 'static + Copy,
 {
     let sample_rate = config.sample_rate.0 as f32;
     let sample_clock = 0f32;
     let nchannels = config.channels as usize;
-    let mut request = SampleRequestOptions {
+    let mut request = SinWave {
         sample_rate,
         sample_clock,
         nchannels,
     };
     let err_fn = |err| eprintln!("Error building output sound stream: {}", err);
 
-    let track: Vec<Note> = vec![music::Note::C4, music::Note::D4, music::Note::E4, music::Note::F4, music::Note::G4, music::Note::A4, music::Note::B4, music::Note::C5];
+    let track: Vec<Note> = vec![Note::C4, Note::D4, Note::E4, Note::F4, Note::G4, Note::A4, Note::B4, Note::C5];
     let track_len = track.len();
 
     let mut time = Instant::now();
@@ -102,15 +88,15 @@ pub fn stream_make<T, F>(
     Ok(stream)
 }
 
-fn update_sample_buffer<T, F>(output: &mut [T], request: &mut SampleRequestOptions, mut sound_function: F, note: f32, sample_sender: &Sender<Vec<f32>>,)
+fn update_sample_buffer<T, F>(output: &mut [T], request: &mut SinWave, mut sound_function: F, note: f32, sample_sender: &Sender<Vec<f32>>,)
     where
         T: cpal::Sample,
-        F: FnMut(&mut SampleRequestOptions, f32) -> f32 + std::marker::Send + 'static,
+        F: FnMut(&mut dyn Waveform, f32, f32) -> f32 + std::marker::Send + 'static,
 {
     let mut samples = vec![];
     samples.clear();
     for frame in output.chunks_mut(request.nchannels) {
-        let value: T = cpal::Sample::from::<f32>(&sound_function(request, note));
+        let value: T = cpal::Sample::from::<f32>(&sound_function(request, note, 1.0));
         for sample in frame.iter_mut() {
             *sample = value;
             samples.push(value.to_f32());
