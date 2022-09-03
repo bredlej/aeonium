@@ -19,5 +19,6 @@ fn main() -> anyhow::Result<()> {
     let (sample_sender, sample_receiver) = channel();
 
     let stream = aeonium::stream_setup_for(aeonium::play_note, app, beat_sender, sample_sender).unwrap();
-    ui::run(stream, &mut app_mut, &beat_receiver, sample_receiver)
+
+    ui::run(stream, &mut app_mut, &beat_receiver, &sample_receiver)
 }

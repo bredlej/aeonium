@@ -11,14 +11,12 @@ pub trait Beat {
 
 pub struct App {
     pub bpm: u128,
-    pub samples: Vec<f32>,
 }
 
 impl Default for App {
     fn default() -> App {
         App {
             bpm: 60,
-            samples: vec![],
         }
     }
 }

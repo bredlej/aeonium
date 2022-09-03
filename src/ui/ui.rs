@@ -18,16 +18,16 @@ use crate::common::{BeatEvent};
 use crate::ui::SampleWidget;
 use crate::ui::widgets::BpmWidget;
 
-pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>, beat_receiver: &Receiver<BeatEvent>, sample_receiver: Receiver<Vec<f32>>) -> anyhow::Result<()> {
+pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>, beat_receiver: &Receiver<BeatEvent>, sample_receiver: &Receiver<Vec<f32>>) -> anyhow::Result<()> {
     stream.play()?;
-    // setup terminal
     enable_raw_mode()?;
+
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let res = run_app(&mut terminal, app, beat_receiver, sample_receiver);
+    let res = run_ui(&mut terminal, app, beat_receiver, sample_receiver);
 
     disable_raw_mode()?;
     execute!(
@@ -43,7 +43,7 @@ pub fn run(stream: Stream, app: &mut Arc<Mutex<App>>, beat_receiver: &Receiver<B
     Ok(())
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut Arc<Mutex<App>>, beat_receiver: &Receiver<BeatEvent>, sample_receiver: Receiver<Vec<f32>>) -> io::Result<()> {
+fn run_ui<B: Backend>(terminal: &mut Terminal<B>, app: &mut Arc<Mutex<App>>, beat_receiver: &Receiver<BeatEvent>, sample_receiver: &Receiver<Vec<f32>>) -> io::Result<()> {
     loop {
 
         let beat_event = beat_receiver.try_recv();
